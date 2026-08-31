@@ -1,13 +1,17 @@
 import {
   ALARM_NAME,
   DEFAULT_MESSAGE,
+  GENERAL_NOTIFICATION_ID,
+  MSG_GENERAL_SYNC,
+  MSG_GENERAL_TEST_REMINDER,
   MSG_PLAY_SOUND,
   MSG_TEST_REMINDER,
-  NOTIFICATION_ID,
+  generalIdFromAlarm,
 } from "./constants";
 import { loadSettings } from "./settings";
-import { syncAlarm } from "./alarms";
-import { showWaterReminderToast } from "./toast";
+import { loadGeneralReminders, nextOccurrence } from "./general-reminders";
+import { syncAlarm, syncGeneralReminderAlarms } from "./alarms";
+import { showReminderToast } from "./toast";
 
 async function ensureOffscreen(): Promise<void> {
   const existing = await chrome.runtime.getContexts({
@@ -19,7 +23,7 @@ async function ensureOffscreen(): Promise<void> {
   await chrome.offscreen.createDocument({
     url: "src/offscreen.html",
     reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
-    justification: "Play the water reminder sound.",
+    justification: "Play the reminder sound.",
   });
 }
 
@@ -49,25 +53,35 @@ function canInjectIntoUrl(url: string | undefined): boolean {
   return Boolean(url?.startsWith("http://") || url?.startsWith("https://"));
 }
 
-async function showOsNotification(message: string): Promise<boolean> {
+async function showOsNotification(
+  id: string,
+  title: string,
+  message: string,
+  contextMessage: string,
+): Promise<boolean> {
   try {
-    await chrome.notifications.create(NOTIFICATION_ID, {
+    await chrome.notifications.create(id, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-      title: "Water Reminder",
+      title,
       message,
-      contextMessage: "A small pause for your next sip",
+      contextMessage,
       silent: true,
       priority: 2,
     });
     return true;
   } catch (error) {
-    console.error("Water Reminder notification failed", error);
+    console.error("Reminder notification failed", error);
     return false;
   }
 }
 
-async function showInPageToast(message: string): Promise<boolean> {
+async function showInPageToast(
+  message: string,
+  title: string,
+  icon: string,
+  theme: "water" | "general",
+): Promise<boolean> {
   const [tab] = await chrome.tabs.query({
     active: true,
     lastFocusedWindow: true,
@@ -78,67 +92,162 @@ async function showInPageToast(message: string): Promise<boolean> {
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: showWaterReminderToast,
-      args: [message],
+      func: showReminderToast,
+      args: [title, message, icon, theme],
     });
     return true;
   } catch (error) {
-    console.error("Water Reminder browser toast failed", error);
+    console.error("Reminder browser toast failed", error);
     return false;
   }
 }
 
 async function deliverReminder(
+  notificationId: string,
+  title: string,
   message: string,
+  contextMessage: string,
+  theme: "water" | "general",
+  icon: string,
   volume?: number,
 ): Promise<void> {
   await playReminderSound(volume).catch(() => undefined);
 
-  const notificationShown = await showOsNotification(message);
-  const toastShown = await showInPageToast(message);
+  const notificationShown = await showOsNotification(
+    notificationId,
+    title,
+    message,
+    contextMessage,
+  );
+  const toastShown = await showInPageToast(message, title, icon, theme);
   if (!notificationShown && !toastShown) {
-    console.error("Water Reminder could not show a notification");
+    console.error("Could not show a notification");
   }
 }
 
-async function fireReminder(): Promise<void> {
+async function fireWaterReminder(): Promise<void> {
   const settings = await loadSettings();
   if (!settings.enabled) {
     return;
   }
-  await deliverReminder(settings.message, settings.volume);
+  await deliverReminder(
+    "water-reminder",
+    "Water Reminder",
+    settings.message,
+    "A small pause for your next sip",
+    "water",
+    "💧",
+    settings.volume,
+  );
+}
+
+async function fireGeneralReminder(id: string): Promise<void> {
+  const reminders = await loadGeneralReminders();
+  const reminder = reminders.find((item) => item.id === id);
+  if (!reminder || !reminder.enabled) {
+    return;
+  }
+  const settings = await loadSettings();
+  await deliverReminder(
+    `${GENERAL_NOTIFICATION_ID}-${id}`,
+    "Reminder",
+    reminder.message,
+    "A quick reminder for you",
+    "general",
+    "🔔",
+    settings.volume,
+  );
+  await rescheduleGeneralAlarm(reminder);
+}
+
+async function rescheduleGeneralAlarm(reminder: {
+  id: string;
+  hour: number;
+  minute: number;
+  enabled: boolean;
+}): Promise<void> {
+  const alarmName = `general-reminder-${reminder.id}`;
+  await chrome.alarms.clear(alarmName);
+  if (!reminder.enabled) {
+    return;
+  }
+  await chrome.alarms.create(alarmName, {
+    when: nextOccurrence(reminder.hour, reminder.minute),
+  });
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) {
-    void fireReminder();
+    void fireWaterReminder();
+    return;
+  }
+  const generalId = generalIdFromAlarm(alarm.name);
+  if (generalId) {
+    void fireGeneralReminder(generalId);
   }
 });
 
 chrome.runtime.onInstalled.addListener(() => {
   void loadSettings().then(syncAlarm);
+  void loadGeneralReminders().then(syncGeneralReminderAlarms);
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void loadSettings().then(syncAlarm);
+  void loadGeneralReminders().then(syncGeneralReminderAlarms);
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== MSG_TEST_REMINDER) {
-    return undefined;
+  if (message?.type === MSG_TEST_REMINDER) {
+    void (async () => {
+      const settings = await loadSettings();
+      const nextMessage =
+        typeof message.message === "string" && message.message.trim()
+          ? message.message.trim()
+          : settings.message || DEFAULT_MESSAGE;
+      const nextVolume =
+        typeof message.volume === "number" ? message.volume : settings.volume;
+      await deliverReminder(
+        "water-reminder",
+        "Water Reminder",
+        nextMessage,
+        "A small pause for your next sip",
+        "water",
+        "💧",
+        nextVolume,
+      );
+      sendResponse({ ok: true });
+    })();
+    return true;
   }
 
-  void (async () => {
-    const settings = await loadSettings();
-    const nextMessage =
-      typeof message.message === "string" && message.message.trim()
-        ? message.message.trim()
-        : settings.message || DEFAULT_MESSAGE;
-    const nextVolume =
-      typeof message.volume === "number" ? message.volume : settings.volume;
-    await deliverReminder(nextMessage, nextVolume);
-    sendResponse({ ok: true });
-  })();
+  if (message?.type === MSG_GENERAL_TEST_REMINDER) {
+    void (async () => {
+      const nextMessage =
+        typeof message.message === "string" && message.message.trim()
+          ? message.message.trim()
+          : "Time for your reminder";
+      await deliverReminder(
+        "general-reminder",
+        "Reminder",
+        nextMessage,
+        "A quick reminder for you",
+        "general",
+        "🔔",
+      );
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
 
-  return true;
+  if (message?.type === MSG_GENERAL_SYNC) {
+    void (async () => {
+      const reminders = await loadGeneralReminders();
+      await syncGeneralReminderAlarms(reminders);
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
+  return undefined;
 });
