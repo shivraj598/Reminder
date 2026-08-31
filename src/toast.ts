@@ -1,18 +1,28 @@
 /**
- * Must stay self-contained: Chrome serializes this function into the page.
- * Do not reference imports or outer-scope bindings.
+ * Must stay fully self-contained: Chrome serializes this single function into
+ * the page, so it cannot reference any other module, import, helper, or
+ * outer-scope binding. Everything must live inside this function body.
  */
-export function showWaterReminderToast(message: string): void {
-  const hostId = "water-reminder-toast-host";
+export function showReminderToast(
+  title: string,
+  message: string,
+  icon: string,
+  theme: "water" | "general",
+): void {
+  const hostId = "reminder-toast-host";
   document.getElementById(hostId)?.remove();
 
+  const isWater = theme === "water";
   const host = document.createElement("div");
   host.id = hostId;
   const shadow = host.attachShadow({ mode: "open" });
 
   const style = document.createElement("style");
+  const accent = isWater ? "#0e9c8c" : "#e0932d";
+  const accentFg = isWater ? "#0b3d38" : "#3a2406";
+  const ink = "#2a2f42";
   style.textContent = `
-    .card {
+    .sk-card {
       position: fixed;
       top: 18px;
       right: 18px;
@@ -21,85 +31,90 @@ export function showWaterReminderToast(message: string): void {
       box-sizing: border-box;
       padding: 12px 14px 12px 12px;
       display: grid;
-      grid-template-columns: 36px 1fr auto;
+      grid-template-columns: 38px 1fr auto;
       gap: 12px;
       align-items: start;
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #eef7f6;
-      background: #0d1b1b;
-      border: 1px solid #2b5551;
-      border-radius: 14px;
-      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(105, 230, 209, 0.05);
-      animation: slide-in 220ms cubic-bezier(.2,.8,.2,1);
+      color: ${ink};
+      background: #fbf8ef;
+      border: 2px solid ${ink};
+      border-radius: 10px 16px 11px 17px;
+      box-shadow: 4px 5px 0 ${ink};
+      animation: sk-in 220ms cubic-bezier(.2,.8,.2,1);
     }
-    @keyframes slide-in {
+    @keyframes sk-in {
       from { transform: translateY(-8px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    .icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 11px;
-      background: #69e6d1;
-      color: #06201d;
+    .sk-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      background: ${accent};
+      color: ${accentFg};
       display: grid;
       place-items: center;
-      font-size: 18px;
+      font-size: 19px;
       line-height: 1;
+      border: 2px solid ${ink};
+      box-shadow: 2px 2px 0 ${ink};
     }
-    .title {
+    .sk-title {
       margin: 0;
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing: 0.01em;
+      text-transform: uppercase;
     }
-    .body {
+    .sk-body {
       margin: 4px 0 0;
       font-size: 13px;
       line-height: 1.4;
-      color: #b5cbca;
+      color: #4a4f63;
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .close {
+    .sk-close {
       appearance: none;
-      border: 0;
-      background: transparent;
-      color: #8da4a3;
-      font-size: 18px;
+      border: 2px solid ${ink};
+      background: #fff8ec;
+      color: ${ink};
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      font-size: 15px;
       line-height: 1;
       cursor: pointer;
-      padding: 0 2px;
     }
-    .close:hover { color: #eef7f6; }
+    .sk-close:hover { background: #eceae0; }
   `;
 
   const wrap = document.createElement("div");
-  wrap.className = "card";
+  wrap.className = "sk-card";
   wrap.setAttribute("role", "status");
   wrap.setAttribute("aria-live", "polite");
 
-  const icon = document.createElement("div");
-  icon.className = "icon";
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = "💧";
+  const iconEl = document.createElement("div");
+  iconEl.className = "sk-icon";
+  iconEl.setAttribute("aria-hidden", "true");
+  iconEl.textContent = icon;
 
   const copy = document.createElement("div");
-  const title = document.createElement("p");
-  title.className = "title";
-  title.textContent = "Water Reminder";
-  const body = document.createElement("p");
-  body.className = "body";
-  body.textContent = message;
-  copy.append(title, body);
+  const titleEl = document.createElement("p");
+  titleEl.className = "sk-title";
+  titleEl.textContent = title;
+  const bodyEl = document.createElement("p");
+  bodyEl.className = "sk-body";
+  bodyEl.textContent = message;
+  copy.append(titleEl, bodyEl);
 
   const close = document.createElement("button");
-  close.className = "close";
+  close.className = "sk-close";
   close.type = "button";
   close.setAttribute("aria-label", "Dismiss");
   close.textContent = "×";
 
-  wrap.append(icon, copy, close);
+  wrap.append(iconEl, copy, close);
   shadow.append(style, wrap);
   document.documentElement.append(host);
 
