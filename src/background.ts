@@ -164,6 +164,7 @@ async function rescheduleGeneralAlarm(reminder: {
   id: string;
   hour: number;
   minute: number;
+  second: number;
   enabled: boolean;
 }): Promise<void> {
   const alarmName = `general-reminder-${reminder.id}`;
@@ -172,7 +173,7 @@ async function rescheduleGeneralAlarm(reminder: {
     return;
   }
   await chrome.alarms.create(alarmName, {
-    when: nextOccurrence(reminder.hour, reminder.minute),
+    when: nextOccurrence(reminder.hour, reminder.minute, reminder.second),
   });
 }
 
