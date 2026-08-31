@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Water Reminder",
-  "version": "1.0.0",
-  "description": "Remind yourself to drink water at a custom interval, with a custom message and sound.",
+  "name": "Reminder",
+  "version": "1.2.0",
+  "description": "Water reminders on an interval, plus general one-off reminders at a time you choose — with custom messages and sounds.",
   "permissions": [
     "alarms",
     "notifications",
@@ -18,7 +18,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Water Reminder",
+    "default_title": "Reminder",
     "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
