@@ -14,10 +14,13 @@ import {
   MSG_GENERAL_TEST_REMINDER,
 } from "../constants";
 import {
+  formatRelativeTime,
   formatReminderTime,
   loadGeneralReminders,
   nextOccurrence,
   saveGeneralReminders,
+  toTwentyFour,
+  toTwelveHour,
   type GeneralReminder,
 } from "../general-reminders";
 import { Button } from "@/components/ui/button";
@@ -28,22 +31,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { TimePicker, type Period } from "./TimePicker";
 
 const MAX_MESSAGE_LENGTH = 240;
 
 type DraftTime = {
-  hour: string;
-  minute: string;
+  hour: number;
+  minute: number;
+  second: number;
+  period: Period;
 };
+
+function currentDraftTime(): DraftTime {
+  const now = new Date();
+  const { hour12, period } = toTwelveHour(now.getHours());
+  return {
+    hour: hour12,
+    minute: now.getMinutes(),
+    second: 0,
+    period,
+  };
+}
 
 export function GeneralTab() {
   const [reminders, setReminders] = useState<GeneralReminder[]>([]);
   const [message, setMessage] = useState("");
-  const [time, setTime] = useState<DraftTime>({ hour: "14", minute: "00" });
+  const [time, setTime] = useState<DraftTime>(currentDraftTime);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -59,6 +75,10 @@ export function GeneralTab() {
     setStatus("Reminders saved. Each will fire at its set time.");
   }
 
+  function currentHour24(): number {
+    return toTwentyFour(time.hour, time.period);
+  }
+
   function handleAddOrUpdate(): void {
     setError("");
     const trimmed = message.trim();
@@ -66,8 +86,9 @@ export function GeneralTab() {
       setError("Enter a reminder message.");
       return;
     }
-    const hour = clampInt(time.hour, 23);
-    const minute = clampInt(time.minute, 59);
+    const hour = currentHour24();
+    const minute = time.minute;
+    const second = time.second;
     setSaving(true);
     void (async () => {
       try {
@@ -75,7 +96,7 @@ export function GeneralTab() {
         if (editingId) {
           next = reminders.map((item) =>
             item.id === editingId
-              ? { ...item, message: trimmed, hour, minute }
+              ? { ...item, message: trimmed, hour, minute, second }
               : item,
           );
         } else {
@@ -86,6 +107,7 @@ export function GeneralTab() {
               message: trimmed,
               hour,
               minute,
+              second,
               enabled: true,
             },
           ];
@@ -94,7 +116,7 @@ export function GeneralTab() {
         await syncOnBackground();
         setMessage("");
         setEditingId(null);
-        setTime({ hour: "14", minute: "00" });
+        setTime(currentDraftTime());
         await refresh();
       } catch (err) {
         setError(
@@ -109,9 +131,12 @@ export function GeneralTab() {
   function startEdit(reminder: GeneralReminder): void {
     setEditingId(reminder.id);
     setMessage(reminder.message);
+    const { hour12, period } = toTwelveHour(reminder.hour);
     setTime({
-      hour: reminder.hour.toString().padStart(2, "0"),
-      minute: reminder.minute.toString().padStart(2, "0"),
+      hour: hour12,
+      minute: reminder.minute,
+      second: reminder.second,
+      period,
     });
     setError("");
   }
@@ -146,24 +171,6 @@ export function GeneralTab() {
 
   async function syncOnBackground(): Promise<void> {
     void chrome.runtime.sendMessage({ type: MSG_GENERAL_SYNC }).catch(() => {});
-  }
-
-  function handleTimeChange(field: "hour" | "minute", value: string): void {
-    let digits = value.replace(/\D/g, "").slice(0, 2);
-    if (field === "minute" && digits.length > 0) {
-      digits = Math.min(59, Number(digits)).toString().padStart(2, "0");
-    } else if (field === "hour" && digits.length > 0) {
-      digits = Math.min(23, Number(digits)).toString().padStart(2, "0");
-    }
-    setTime((prev) => ({ ...prev, [field]: digits }));
-  }
-
-  function clampInt(value: string, max: number): number {
-    const num = Number(value);
-    if (!Number.isFinite(num)) {
-      return 0;
-    }
-    return Math.min(max, Math.max(0, Math.floor(num)));
   }
 
   const formLabel = editingId ? "Edit reminder" : "New reminder";
@@ -205,41 +212,51 @@ export function GeneralTab() {
             <Label htmlFor="general-time" className="text-xs font-bold text-muted-foreground">
               Time of day
             </Label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Clock className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="general-time"
-                  type="text"
-                  inputMode="numeric"
-                  value={time.hour}
-                  onChange={(event) => handleTimeChange("hour", event.target.value)}
-                  aria-label="Hour"
-                  className="pl-8 text-center"
-                  maxLength={2}
-                />
-              </div>
-              <span className="text-muted-foreground">:</span>
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={time.minute}
-                onChange={(event) => handleTimeChange("minute", event.target.value)}
-                aria-label="Minute"
-                className="w-16 text-center"
-                maxLength={2}
-              />
-              <div className="ml-auto text-right">
-                <p className="text-lg font-black tabular-nums text-amber-500">
-                  {formatReminderTime(
-                    clampInt(time.hour, 23),
-                    clampInt(time.minute, 59),
-                  )}
+            <TimePicker
+              hour={time.hour}
+              minute={time.minute}
+              second={time.second}
+              period={time.period}
+              onHourChange={(hour) => setTime((prev) => ({ ...prev, hour }))}
+              onMinuteChange={(minute) =>
+                setTime((prev) => ({ ...prev, minute }))
+              }
+              onSecondChange={(second) =>
+                setTime((prev) => ({ ...prev, second }))
+              }
+              onPeriodChange={(period) =>
+                setTime((prev) => ({ ...prev, period }))
+              }
+            />
+            <div className="flex items-center justify-center gap-2 rounded-[10px] border-2 border-dashed border-foreground/40 bg-background/40 px-3 py-2">
+              <Clock className="h-4 w-4 shrink-0 text-amber-500" strokeWidth={2.5} />
+              {message.trim() ? (
+                <p className="text-sm font-medium text-foreground">
+                  “{message.trim()}” is set for{" "}
+                  <span className="font-black text-red-500">
+                    {formatRelativeTime(
+                      nextOccurrence(
+                        currentHour24(),
+                        time.minute,
+                        time.second,
+                      ),
+                    )}
+                  </span>
+                  .
                 </p>
-                <p className="text-[10px] text-muted-foreground">
-                  24-hour format
+              ) : (
+                <p className="text-sm font-medium text-muted-foreground">
+                  The reminder will fire at{" "}
+                  <span className="font-black text-red-500">
+                    {formatReminderTime(
+                      currentHour24(),
+                      time.minute,
+                      time.second,
+                    )}
+                  </span>
+                  .
                 </p>
-              </div>
+              )}
             </div>
           </div>
 
@@ -312,16 +329,24 @@ export function GeneralTab() {
                     <Clock className="h-4 w-4" strokeWidth={2.5} />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
+                    <p className="truncate text-sm font-bold text-red-500">
                       {reminder.message}
                     </p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {formatReminderTime(
+                        reminder.hour,
+                        reminder.minute,
+                        reminder.second,
+                      )}
+                    </p>
                     <p
-                      className={`text-xs font-medium ${
+                      className={`text-xs font-semibold ${
                         isActive ? "text-amber-700" : "text-muted-foreground"
                       }`}
                     >
-                      {formatReminderTime(reminder.hour, reminder.minute)}
-                      {isActive ? " · daily" : " · paused"}
+                      {isActive
+                        ? formatRelativeTime(next)
+                        : "Paused"}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
