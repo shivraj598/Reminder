@@ -281,7 +281,7 @@ export function GeneralTab() {
               onClick={() => {
                 setEditingId(null);
                 setMessage("");
-                setTime({ hour: "14", minute: "00" });
+                setTime(currentDraftTime());
                 setError("");
               }}
               className="w-full"
