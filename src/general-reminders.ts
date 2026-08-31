@@ -5,6 +5,7 @@ export type GeneralReminder = {
   message: string;
   hour: number;
   minute: number;
+  second: number;
   enabled: boolean;
 };
 
@@ -48,6 +49,7 @@ function sanitizeReminder(value: unknown): GeneralReminder | null {
   }
   const hour = clampHour(record.hour);
   const minute = clampMinute(record.minute);
+  const second = clampSecond(record.second);
   return {
     id:
       typeof record.id === "string" && record.id
@@ -56,6 +58,7 @@ function sanitizeReminder(value: unknown): GeneralReminder | null {
     message: message.slice(0, MAX_MESSAGE_LENGTH),
     hour,
     minute,
+    second,
     enabled: Boolean(record.enabled),
   };
 }
@@ -76,17 +79,33 @@ function clampMinute(value: unknown): number {
   return Math.min(59, Math.max(0, Math.floor(num)));
 }
 
-export function nextOccurrence(hour: number, minute: number): number {
+function clampSecond(value: unknown): number {
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num)) {
+    return 0;
+  }
+  return Math.min(59, Math.max(0, Math.floor(num)));
+}
+
+export function nextOccurrence(
+  hour: number,
+  minute: number,
+  second = 0,
+): number {
   const now = new Date();
   const candidate = new Date(now);
-  candidate.setHours(hour, minute, 0, 0);
+  candidate.setHours(hour, minute, second, 0);
   if (candidate.getTime() <= now.getTime()) {
     candidate.setDate(candidate.getDate() + 1);
   }
   return candidate.getTime();
 }
 
-export function formatReminderTime(hour: number, minute: number): string {
+export function formatReminderTime(
+  hour: number,
+  minute: number,
+  second = 0,
+): string {
   const period = hour >= 12 ? "PM" : "AM";
   let displayHour = hour % 12;
   if (displayHour === 0) {
@@ -94,5 +113,41 @@ export function formatReminderTime(hour: number, minute: number): string {
   }
   return `${displayHour.toString().padStart(2, "0")}:${minute
     .toString()
-    .padStart(2, "0")} ${period}`;
+    .padStart(2, "0")}:${second.toString().padStart(2, "0")} ${period}`;
+}
+
+export function toTwelveHour(
+  hour24: number,
+): { hour12: number; period: "AM" | "PM" } {
+  const period = hour24 < 12 ? "AM" : "PM";
+  const hour12 = hour24 % 12;
+  return { hour12: hour12 === 0 ? 12 : hour12, period };
+}
+
+export function toTwentyFour(
+  hour12: number,
+  period: "AM" | "PM",
+): number {
+  if (period === "AM") {
+    return hour12 === 12 ? 0 : hour12;
+  }
+  return hour12 === 12 ? 12 : hour12 + 12;
+}
+
+export function formatRelativeTime(timestamp: number): string {
+  const deltaMs = timestamp - Date.now();
+  if (deltaMs <= 0) {
+    return "Due now";
+  }
+  const totalMinutes = Math.ceil(deltaMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) {
+    return `In ${days}d ${hours}h ${minutes}m`;
+  }
+  if (hours > 0) {
+    return `In ${hours}h ${minutes}m`;
+  }
+  return `In ${minutes}m`;
 }
