@@ -28,8 +28,14 @@ async function ensureOffscreen(): Promise<void> {
 }
 
 async function playReminderSound(volume?: number): Promise<void> {
-  const settings = await loadSettings();
-  const nextVolume = volume ?? settings.volume;
+  let nextVolume = volume;
+  if (nextVolume === undefined) {
+    const settings = await loadSettings();
+    nextVolume = settings.volume;
+  }
+  if (nextVolume <= 0) {
+    return;
+  }
   await ensureOffscreen();
   let lastError: unknown;
   for (let attempt = 0; attempt < 5; attempt += 1) {
