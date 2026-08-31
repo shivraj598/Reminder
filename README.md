@@ -8,7 +8,7 @@ The UI is styled in a hand-drawn 2D "sketchbook" aesthetic: warm paper grid back
 
 | Water Reminders | General Reminders |
 | --- | --- |
-| <img src="sampleUI/water-full.png" width="320" alt="Water reminder tab"> | <img src="sampleUI/general-full.png" width="320" alt="General reminders tab"> |
+| <img src="sampleUI/water-reminder.png" width="320" alt="Water reminder tab"> | <img src="sampleUI/general-reminder.png" width="320" alt="General reminders tab"> |
 
 > Screenshots live in `public/sampleUI/` (mirrored to `dist/sampleUI/` on build).
 
