@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -85,7 +85,7 @@ function UnitWheel({
             onBlur={commitEdit}
             onKeyDown={handleDraftKeyDown}
             inputMode="numeric"
-            aria-label={ariaLabel}
+            aria-label={`${ariaLabel}, type`}
             className="h-full w-full bg-transparent text-center text-sm font-black tabular-nums text-foreground outline-none"
           />
         ) : (
@@ -136,86 +136,54 @@ export function TimePicker({
   onSecondChange,
   onPeriodChange,
 }: TimePickerProps) {
-  const hourRef = useRef<HTMLDivElement>(null);
-  const minuteRef = useRef<HTMLDivElement>(null);
-  const secondRef = useRef<HTMLDivElement>(null);
-
   return (
     <div className="grid gap-2">
-      <div
-        className="flex items-center justify-center gap-3 rounded-[10px] border-2 border-foreground bg-background/70 p-3"
-        onWheel={(event) => {
-          if (event.deltaY === 0) {
-            return;
-          }
-          const target = event.target as HTMLElement;
-          const unit = target.closest("[data-unit]")?.getAttribute("data-unit");
-          if (unit) {
-            return;
-          }
-          event.preventDefault();
-          if (typeof hour === "number") {
-            const delta = event.deltaY < 0 ? 1 : -1;
-            onHourChange(clampBetween(hour + delta, 1, 12));
-            if (hourRef.current) {
-              hourRef.current
-                .querySelector<HTMLButtonElement>('[aria-label*="change"]')
-                ?.click();
-            }
-          }
-        }}
-      >
-        <div className="grid justify-items-center gap-0.5">
+      <div className="flex items-start justify-center gap-3 rounded-[10px] border-2 border-foreground bg-background/70 p-3">
+        <div className="grid justify-items-center gap-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Hour
           </span>
-          <div ref={hourRef} data-unit="hour">
-            <UnitWheel
-              value={hour}
-              min={1}
-              max={12}
-              ariaLabel="Hour"
-              onChange={onHourChange}
-            />
-          </div>
+          <UnitWheel
+            value={hour}
+            min={1}
+            max={12}
+            ariaLabel="Hour"
+            onChange={onHourChange}
+          />
         </div>
 
-        <span className="text-xl font-black text-foreground/30">:</span>
+        <span className="mt-7 text-xl font-black text-foreground/30">:</span>
 
-        <div className="grid justify-items-center gap-0.5">
+        <div className="grid justify-items-center gap-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Min
           </span>
-          <div ref={minuteRef} data-unit="minute">
-            <UnitWheel
-              value={minute}
-              min={0}
-              max={59}
-              ariaLabel="Minute"
-              onChange={onMinuteChange}
-            />
-          </div>
+          <UnitWheel
+            value={minute}
+            min={0}
+            max={59}
+            ariaLabel="Minute"
+            onChange={onMinuteChange}
+          />
         </div>
 
-        <span className="text-xl font-black text-foreground/30">:</span>
+        <span className="mt-7 text-xl font-black text-foreground/30">:</span>
 
-        <div className="grid justify-items-center gap-0.5">
+        <div className="grid justify-items-center gap-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Sec
           </span>
-          <div ref={secondRef} data-unit="second">
-            <UnitWheel
-              value={second}
-              min={0}
-              max={59}
-              ariaLabel="Second"
-              onChange={onSecondChange}
-            />
-          </div>
+          <UnitWheel
+            value={second}
+            min={0}
+            max={59}
+            ariaLabel="Second"
+            onChange={onSecondChange}
+          />
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex items-center justify-center">
         <div className="grid grid-cols-2 gap-1 rounded-[10px] border-2 border-foreground bg-background p-1">
           {(["AM", "PM"] as Period[]).map((option) => {
             const active = period === option;
