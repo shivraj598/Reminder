@@ -35,7 +35,7 @@ export async function syncGeneralReminderAlarms(
       continue;
     }
     await chrome.alarms.create(generalAlarmName(reminder.id), {
-      when: nextOccurrence(reminder.hour, reminder.minute),
+      when: nextOccurrence(reminder.hour, reminder.minute, reminder.second),
     });
   }
 }
